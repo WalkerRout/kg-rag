@@ -43,7 +43,6 @@ model_name = os.environ["MODEL_NAME"]
 # remapping for langchain neo4j integration
 os.environ["NEO4J_URL"] = os.environ["NEO4J_URI"]
 
-
 llm = ChatOpenAI(model_name=model_name)
 
 # TODO: make all the neo4j async
@@ -69,19 +68,10 @@ class Entities(BaseModel):
     "appear in the text",
   )
 
-prompt = ChatPromptTemplate.from_messages(
-  [
-    (
-      "system",
-      "You are extracting organization and person entities from the text.",
-    ),
-    (
-      "human",
-      "Use the given format to extract information from the following "
-      "input: {question}",
-    ),
-  ]
-)
+prompt = ChatPromptTemplate.from_messages([
+  ("system", "You are extracting organization and person entities from the text."),
+  ("human", "Use the given format to extract information from the following input: {question}"),
+])
 
 entity_chain = prompt | llm.with_structured_output(Entities)
 
@@ -109,6 +99,7 @@ def structured_retriever(question: str) -> str:
   in the question
   """
   result = ""
+  # todo ainvoke
   entities = entity_chain.invoke({"question": question})
   for entity in entities.names:
     response = graph.query(
@@ -133,6 +124,7 @@ def structured_retriever(question: str) -> str:
 def retriever(question: str):
   #print(f"Search query: {question}")
   structured_data = structured_retriever(question)
+  # todo asimilarity_search
   unstructured_data = [el.page_content for el in vector_index.similarity_search(question)]
   final_data = f"""Structured data:
 {structured_data}
@@ -204,19 +196,17 @@ async def query(request: QueryRequest = Depends(), conn = Depends(get_pg_conn)):
     Tool(
       args_schema=DocumentInput,
       name="uploaded_document",
-      description=f"useful when you want to answer questions about the current document",
+      description=f"useful when you want to answer questions about the current uploaded document",
       func=RetrievalQA.from_chain_type(llm=llm, retriever=pdf_store.embeddings),
     )
   ]
 
-  prompt = ChatPromptTemplate.from_messages(
-    [
-      ("system", "You are a helpful assistant"),
-      MessagesPlaceholder("chat_history", optional=True),
-      ("human", "{input}"),
-      MessagesPlaceholder("agent_scratchpad"),
-    ]
-  )
+  prompt = ChatPromptTemplate.from_messages([
+    ("system", "You are a helpful assistant"),
+    MessagesPlaceholder("chat_history", optional=True),
+    ("human", "{input}"),
+    MessagesPlaceholder("agent_scratchpad"),
+  ])
   agent = create_openai_tools_agent(llm, tools, prompt)
   agent_executor = AgentExecutor(agent=agent, tools=tools)
 
