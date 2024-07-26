@@ -1,6 +1,6 @@
 import os
 import json
-import uuid
+import uuid as ud
 import logging
 
 from typing import Tuple, List, Optional
@@ -31,7 +31,7 @@ from langchain_community.vectorstores.neo4j_vector import remove_lucene_chars
 from langchain_openai import ChatOpenAI
 from langchain_openai import OpenAIEmbeddings
 
-from fastapi import FastAPI, Depends, HTTPException, File, UploadFile
+from fastapi import FastAPI, Depends, HTTPException, File, UploadFile, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from database import postgres_db, get_pg_conn
@@ -147,9 +147,14 @@ upload_manager = UploadManager(upload_dir="/uploads")
 # configure embedding management
 embedding_manager = EmbeddingManager()
 
-# configure app
+# configure ap
 app = FastAPI(root_path="/api/v1")
-origins = ["*"]
+origins = [
+  "http://front-end:3000",
+  "http://localhost:3000",
+  "http://localhost:8505",
+  "*"
+]
 
 app.add_middleware(
   CORSMiddleware,
@@ -157,26 +162,38 @@ app.add_middleware(
   allow_credentials=True,
   allow_methods=["*"],
   allow_headers=["*"],
+  expose_headers=["*"],
 )
 
 @app.get("/")
 async def root():
   return {"message": "Hello World"}
 
-class DocumentInput(BaseModel):
-  question: str = Field(description="question for retrieval chain")
-
 class QueryRequest(BaseModel):
   uuid: str
   question: str
+
   chat_history: Optional[List[Tuple[str, str]]] = None
 
-@app.get("/query/")
-async def query(request: QueryRequest = Depends(), conn = Depends(get_pg_conn)):
+@app.post("/query")
+async def query(request: Request, conn = Depends(get_pg_conn)):
   logger.info(f"Received request: {request.json()}")
 
+  request_json = await request.json()
+
+  uuid = request_json.get("uuid")
+  if uuid is None:
+    raise HTTPException(status_code=400, detail="Missing uuid field")
+
+  question = request_json.get("question")
+  if question is None:
+    raise HTTPException(status_code=400, detail="Missing question field")
+
+  instructions = request_json.get("instructions")
+  chat_history = request_json.get("chat_history")
+
   try:
-    query_uuid = uuid.UUID(request.uuid)
+    query_uuid = ud.UUID(uuid)
   except ValueError:
     raise HTTPException(status_code=400, detail="Invalid UUID")
 
@@ -185,6 +202,9 @@ async def query(request: QueryRequest = Depends(), conn = Depends(get_pg_conn)):
     raise HTTPException(status_code=400, detail="Invalid PDF, please reupload")
 
   pdf_store = await embedding_manager.get_embeddings(pdf)
+
+  class DocumentInput(BaseModel):
+    question: str = Field(description="question for retrieval chain")
 
   tools = [
     Tool(
@@ -201,12 +221,17 @@ async def query(request: QueryRequest = Depends(), conn = Depends(get_pg_conn)):
     )
   ]
 
-  prompt = ChatPromptTemplate.from_messages([
-    ("system", "You are a helpful assistant"),
+  if instructions is None:
+    system = [("system", "You are a helpful assistant")]
+  else:
+    system = [("system", ins) for ins in instructions]
+
+  messages = [
     MessagesPlaceholder("chat_history", optional=True),
     ("human", "{input}"),
     MessagesPlaceholder("agent_scratchpad"),
-  ])
+  ]
+  prompt = ChatPromptTemplate.from_messages(system + messages)
   agent = create_openai_tools_agent(llm, tools, prompt)
   agent_executor = AgentExecutor(agent=agent, tools=tools)
 
@@ -222,8 +247,8 @@ async def query(request: QueryRequest = Depends(), conn = Depends(get_pg_conn)):
 
   response = await agent_executor.ainvoke(
     {
-      "input": request.question,
-      "chat_history": convert_to_chat_history(request.chat_history),
+      "input": question,
+      "chat_history": convert_to_chat_history(chat_history),
     }
   )
 
@@ -231,7 +256,7 @@ async def query(request: QueryRequest = Depends(), conn = Depends(get_pg_conn)):
 
   return {"response": response["output"]}
 
-@app.post("/upload/")
+@app.post("/upload")
 async def upload(file: UploadFile = File(...), conn = Depends(get_pg_conn)):
   if file.content_type != "application/pdf":
     raise HTTPException(status_code=400, detail="Invalid file type. Only PDF files are accepted.")
@@ -240,7 +265,7 @@ async def upload(file: UploadFile = File(...), conn = Depends(get_pg_conn)):
   if len(contents) > 10 * 1024 * 1024:  # 10MB
     raise HTTPException(status_code=400, detail="File size exceeds 10MB limit.")
 
-  pdf = PDF(uuid.uuid4(), file.filename)
+  pdf = PDF(ud.uuid4(), file.filename)
   response = await upload_manager.upload(conn, pdf, contents)
 
   return {"uuid": response}
