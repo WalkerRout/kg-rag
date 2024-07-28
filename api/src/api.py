@@ -150,9 +150,6 @@ embedding_manager = EmbeddingManager()
 # configure ap
 app = FastAPI(root_path="/api/v1")
 origins = [
-  "http://front-end:3000",
-  "http://localhost:3000",
-  "http://localhost:8505",
   "*"
 ]
 
