@@ -258,13 +258,14 @@ async def upload(file: UploadFile = File(...), conn = Depends(get_pg_conn)):
   if file.content_type != "application/pdf":
     raise HTTPException(status_code=400, detail="Invalid file type. Only PDF files are accepted.")
 
-  contents = file.file.read()
+  # contents = file.file.read()
+  contents = await file.read()
   if len(contents) > 10 * 1024 * 1024:  # 10MB
     raise HTTPException(status_code=400, detail="File size exceeds 10MB limit.")
 
   pdf = PDF(ud.uuid4(), file.filename)
   response = await upload_manager.upload(conn, pdf, contents)
-
+  logger.info(f"Received request: {response}")
   return {"uuid": response}
 
 @app.on_event("startup")
