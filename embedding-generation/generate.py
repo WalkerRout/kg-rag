@@ -17,16 +17,13 @@ from langchain_openai import ChatOpenAI
 model_name = os.environ["MODEL_NAME"]
 pdf_path = os.environ["PDF_PATH"]
 
-def is_empty(directory):
-  return not any((True for _ in os.scandir(directory)))
-
-if is_empty(pdf_path):
-  sys.exit(f"PDF path at {pdf_path} is empty")
-
 # load the documents
 print(f"Loading documents from {pdf_path}") # todo make this logger
 files = list(map(lambda p: str(p), list(pathlib.Path(pdf_path).rglob("*.pdf"))))
 print(f"Found documents: {files}")
+
+if len(files) == 0:
+  sys.exit(f"No PDF files found at path {pdf_path}")
 
 # how nice it would be to just use:
 # raw_documents = PyPDFDirectoryLoader(pdf_path, recursive=True).load()
@@ -34,6 +31,7 @@ print(f"Found documents: {files}")
 
 raw_documents = []
 for file in files:
+  # embarrasingly parallel problem
   raw_documents.extend(PyMuPDFLoader(file).load())
 
 # chunk documents
