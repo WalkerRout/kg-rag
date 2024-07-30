@@ -1,4 +1,5 @@
 import os
+import sys
 import pathlib
 
 from langchain.text_splitter import TokenTextSplitter
@@ -15,6 +16,12 @@ from langchain_openai import ChatOpenAI
 
 model_name = os.environ["MODEL_NAME"]
 pdf_path = os.environ["PDF_PATH"]
+
+def is_empty(directory):
+  return not any((True for _ in os.scandir(directory)))
+
+if is_empty(pdf_path):
+  sys.exit(f"PDF path at {pdf_path} is empty")
 
 # load the documents
 print(f"Loading documents from {pdf_path}") # todo make this logger
