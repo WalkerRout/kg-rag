@@ -44,14 +44,14 @@ llm = ChatOpenAI(temperature=0, model_name=model_name)
 prompt = ChatPromptTemplate.from_messages([
   ("system", """Your purpose is to construct a knowledge base centred around the AI usage and limitation 
                 policies of other companies and organizations. Use the documents provided to form 
-                relations such as 'Complies with', 'Utilizes', 'Guarantees/Ensures', 'Privatizes', 'Protects',
+                relations such as 'Utilizes', 'Guarantees/Ensures', 'Privatizes', 'Protects',
                 'Enforces', 'Restricts', and other relations between the guarantees the documents mention. 
-                You will focus specifically on the 'Code of Conduct' aspect of these policies. Make sure to 
+                You will focus on the 'Code of Conduct' aspect of these policies. Specifically,
+                you will destruct the sections of the 'Code of Conduct', and use those sections to form relations.
+                Relations must be geared around specific sections of the 'Code of Conduct'. Take care to 
                 properly identify relations; if you are given a phrase such as 'CIBC intellectual property is 
-                protected by law', you should have relations such as;
-                (CIBC intellectual property) --- PROTECTED_BY ---> (law). Try to limit the number of 'Mentions'
-                relations; consider if a more descriptive relation could be used to enhance later 
-                retrieval augmented generation.
+                protected by law', a relation of PROTECTED_BY should be given. Any description of policy related
+                decisions should ideally be a relation.
                 """
   ),
 ])
