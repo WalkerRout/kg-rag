@@ -218,7 +218,7 @@ async def query(request: Request, conn = Depends(get_pg_conn)):
     )
   ]
 
-  if instructions is None:
+  if instructions is None or len(instructions) == 0:
     system = [("system", "You are a helpful assistant")]
   else:
     system = [("system", ins) for ins in instructions]
@@ -258,7 +258,6 @@ async def upload(file: UploadFile = File(...), conn = Depends(get_pg_conn)):
   if file.content_type != "application/pdf":
     raise HTTPException(status_code=400, detail="Invalid file type. Only PDF files are accepted.")
 
-  # contents = file.file.read()
   contents = await file.read()
   if len(contents) > 10 * 1024 * 1024:  # 10MB
     raise HTTPException(status_code=400, detail="File size exceeds 10MB limit.")
